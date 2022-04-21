@@ -1,3 +1,4 @@
+import numpy
 from functools import reduce, lru_cache
 from operator import mul
 
@@ -9,8 +10,9 @@ import torch.utils.checkpoint as checkpoint
 from einops import rearrange
 from mmcv.runner import load_checkpoint
 from timm.models.layers import DropPath, trunc_normal_
+import os
 
-
+import SimpleITK as sitk
 class Mlp(nn.Module):
     """ Multilayer perceptron."""
 
@@ -951,6 +953,13 @@ class SwinTransformerSys3D(nn.Module):
 
         for i, layer in enumerate(self.layers):
             x_downsample.append(x)
+
+            # for j in range(len(x[0])):
+            #     labelmap = (x[0][j].cpu().detach().numpy().astype('float32'))
+            #     seg = sitk.GetImageFromArray(labelmap)
+            #     print(f"Writing layer {i} feature {j}")
+            #     sitk.WriteImage(seg, os.path.join("C:/Users/felix/Desktop/VT-UNet/runs/logs_base/model_1/segs_0/",str(i) + "_" + str(j) + ".nii.gz"))
+
             x, v1, k1, q1, v2, k2, q2 = layer(x, i)
             v_values_1.append(v1)
             k_values_1.append(k1)
@@ -982,7 +991,12 @@ class SwinTransformerSys3D(nn.Module):
                 x = x.permute(0, 4, 1, 2, 3)
                 x = layer_up(x, v_values_1[3 - inx], k_values_1[3 - inx], q_values_1[3 - inx], v_values_2[3 - inx],
                              k_values_2[3 - inx], q_values_2[3 - inx])
-
+            # for j in range(len(x[0])):
+            #     labelmap = (x[0][j].cpu().detach().numpy().astype('float32'))
+            #     seg = sitk.GetImageFromArray(labelmap)
+            #     print(f"Writing layer {inx} feature {j}")
+            #     sitk.WriteImage(seg, os.path.join("C:/Users/felix/Desktop/VT-UNet/runs/logs_base/model_1/segs_0/",
+            #                                       str(inx) + "_" + str(j) + ".nii.gz"))
         x = self.norm_up(x)
 
         return x
@@ -996,7 +1010,12 @@ class SwinTransformerSys3D(nn.Module):
             x = x.view(B, 4 * D, 4 * H, 4 * W, -1)
             x = x.permute(0, 4, 1, 2, 3)  # B,C,D,H,W
             x = self.output(x)
-
+        # for j in range(len(x[0])):
+        #     labelmap = (x[0][j].cpu().detach().numpy().astype('float32'))
+        #     seg = sitk.GetImageFromArray(labelmap)
+        #     print(f"Writing layer {4} feature {j}")
+        #     sitk.WriteImage(seg, os.path.join("C:/Users/felix/Desktop/VT-UNet/runs/logs_base/model_1/segs_0/",
+        #                                       str(4) + "_" + str(j) + ".nii.gz"))
         return x
 
     def _freeze_stages(self):

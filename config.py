@@ -3,8 +3,10 @@
 # --------------------------------------------------------'
 
 user = "YOU"
-BRATS_TRAIN_FOLDERS = "../BRATS2021/Data/RSNA_ASNR_MICCAI_BraTS2021_TrainingData"
-TEST_FOLDER = "test_data"
+# BRATS_TRAIN_FOLDERS = "../BRATS2021/Data/RSNA_ASNR_MICCAI_BraTS2021_TrainingData"
+BRATS_TRAIN_FOLDERS = "./Data"
+
+TEST_FOLDER = "./Data_test"
 
 
 def get_brats_folder(on="val"):

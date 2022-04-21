@@ -155,7 +155,7 @@ def calculate_metrics(preds, targets, patient, tta=False):
     pp = pprint.PrettyPrinter(indent=4)
     assert preds.shape == targets.shape, "Preds and targets do not have the same size"
 
-    labels = ["ET", "TC", "WT"]
+    labels = ["Background", "Liver", "Tumor"]
 
     metrics_list = []
 
@@ -190,7 +190,7 @@ def save_metrics(epoch, metrics, writer, current_epoch, teacher=False, save_fold
     # TODO check if doing it directly to numpy work
     metrics = [torch.tensor(dice, device="cpu").numpy() for dice in metrics]
     # print(metrics)
-    labels = ("ET", "TC", "WT")
+    labels = ("Background", "Liver", "Tumor")
     metrics = {key: value for key, value in zip(labels, metrics)}
     # print(metrics)
     fig, ax = plt.subplots()
@@ -259,22 +259,42 @@ def generate_segmentations_monai(data_loader, model, writer_1, args):
 
         segs = torch.zeros((1, 3, ref_seg.shape[0], ref_seg.shape[1], ref_seg.shape[2]))
         segs[0, :, slice(*crops_idx[0]), slice(*crops_idx[1]), slice(*crops_idx[2])] = val_outputs[0]
+
+        val = val_labels.to(int)
+        val = val[0][1] + val[0][2] * 2
+        merge = segs[0][1] + 2*segs[0][2]
+        print(str(torch.sum(val == 0)))
+        print(str(torch.sum(val == 1)))
+        print(str(torch.sum(val == 2)))
+        plt.figure("check", (18, 6))
+        plt.subplot(1, 3, 1)
+        plt.title("image")
+        plt.imshow(val_inputs.cpu().numpy()[0,0,:, :, 50], cmap="gray")
+        plt.subplot(1, 3, 2)
+        plt.title("label")
+        plt.imshow(val.cpu().numpy()[ :, :, 50])
+        plt.subplot(1, 3, 3)
+        plt.title("output")
+        plt.imshow(merge.cpu().numpy()[:, :, 50])
+        plt.show()
+
         segs = segs[0].numpy() > 0.5
 
-        et = segs[0]
-        net = np.logical_and(segs[1], np.logical_not(et))
-        ed = np.logical_and(segs[2], np.logical_not(segs[1]))
+
+        Background = segs[0]
+        Liver = np.logical_and(segs[1], np.logical_not(Background))
+        Tumor = np.logical_and(segs[2], np.logical_not(segs[1]))
         labelmap = np.zeros(segs[0].shape)
-        labelmap[et] = 4
-        labelmap[net] = 1
-        labelmap[ed] = 2
+        labelmap[Background] = 0
+        labelmap[Liver] = 1
+        labelmap[Tumor] = 2
         labelmap = sitk.GetImageFromArray(labelmap)
 
-        refmap_et, refmap_tc, refmap_wt = [np.zeros_like(ref_seg) for i in range(3)]
-        refmap_et = ref_seg == 4
-        refmap_tc = np.logical_or(refmap_et, ref_seg == 1)
-        refmap_wt = np.logical_or(refmap_tc, ref_seg == 2)
-        refmap = np.stack([refmap_et, refmap_tc, refmap_wt])
+        refmap_background, refmap_liver, refmap_tumor = [np.zeros_like(ref_seg) for i in range(3)]
+        refmap_background = ref_seg == 0
+        refmap_liver = np.logical_or(refmap_liver, ref_seg == 1)
+        refmap_tumor = np.logical_or(refmap_tumor, ref_seg == 2)
+        refmap = np.stack([refmap_background, refmap_liver, refmap_tumor])
 
         patient_metric_list = calculate_metrics(segs, refmap, patient_id)
         metrics_list.append(patient_metric_list)
@@ -287,14 +307,14 @@ def generate_segmentations_monai(data_loader, model, writer_1, args):
     df = pd.DataFrame(val_metrics)
     overlap = df.boxplot(METRICS[1:], by="label", return_type="axes")
     overlap_figure = overlap[0].get_figure()
-    writer_1.add_figure("benchmark/overlap_measures", overlap_figure)
-    haussdorf_figure = df.boxplot(METRICS[0], by="label").get_figure()
-    writer_1.add_figure("benchmark/distance_measure", haussdorf_figure)
-    grouped_df = df.groupby("label")[METRICS]
-    summary = grouped_df.mean().to_dict()
-    for metric, label_values in summary.items():
-        for label, score in label_values.items():
-            writer_1.add_scalar(f"benchmark_{metric}/{label}", score)
+    # writer_1.add_figure("benchmark/overlap_measures", overlap_figure)
+    # haussdorf_figure = df.boxplot(METRICS[0], by="label").get_figure()
+    # writer_1.add_figure("benchmark/distance_measure", haussdorf_figure)
+    # grouped_df = df.groupby("label")[METRICS]
+    # summary = grouped_df.mean().to_dict()
+    # for metric, label_values in summary.items():
+    #     for label, score in label_values.items():
+    #         writer_1.add_scalar(f"benchmark_{metric}/{label}", score)
     df.to_csv((args.save_folder_1 / 'results.csv'), index=False)
 
 
@@ -303,4 +323,5 @@ DICE = "dice"
 SENS = "sens"
 SPEC = "spec"
 SSIM = "ssim"
-METRICS = [HAUSSDORF, DICE, SENS, SPEC, SSIM]
+METRICS = [HAUSSDORF, DICE]
+# METRICS = [HAUSSDORF, DICE, SENS, SPEC, SSIM]

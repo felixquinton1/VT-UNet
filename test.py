@@ -12,7 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = False
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 
 from config import get_config
 from dataset.brats import get_datasets, get_test_datasets

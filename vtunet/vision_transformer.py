@@ -26,7 +26,7 @@ class VTUNet(nn.Module):
 
         self.swin_unet = SwinTransformerSys3D(img_size=(128, 128, 128),
                                             patch_size=(4, 4, 4),
-                                            in_chans=4,
+                                            in_chans=1,
                                             num_classes=self.num_classes,
                                             embed_dim=self.embed_dim,
                                             depths=[2, 2, 2, 1],

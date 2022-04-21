@@ -51,6 +51,7 @@ def normalize(image):
     min_ = np.min(image)
     max_ = np.max(image)
     scale = max_ - min_
+    # if scale != 0:
     image = (image - min_) / scale
     return image
 

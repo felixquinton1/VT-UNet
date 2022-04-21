@@ -19,15 +19,19 @@ class Brats(Dataset):
         self.training = training
         self.datas = []
         self.validation = no_seg
-        self.patterns = ["_t1", "_t1ce", "_t2", "_flair"]
+        # self.patterns = ["_t1", "_t1ce", "_t2", "_flair"]
+        self.patterns = ["im"]
         if not no_seg:
-            self.patterns += ["_seg"]
+            self.patterns += ["lb"]
         for patient_dir in patients_dir:
             patient_id = patient_dir.name
-            paths = [patient_dir / f"{patient_id}{value}.nii.gz" for value in self.patterns]
+            paths = [patient_dir / f"{value}{patient_id[2:]}.nii.gz" for value in self.patterns]
+            # patient = dict(
+            #     id=patient_id, t1=paths[0], t1ce=paths[0],
+            #     t2=paths[0], flair=paths[0], seg=paths[1] if not no_seg else None
+            # )
             patient = dict(
-                id=patient_id, t1=paths[0], t1ce=paths[1],
-                t2=paths[2], flair=paths[3], seg=paths[4] if not no_seg else None
+                id=patient_id, t1=paths[0], seg=paths[1] if not no_seg else None
             )
             self.datas.append(patient)
 
@@ -42,11 +46,15 @@ class Brats(Dataset):
             patient_image = {key: zscore_normalise(patient_image[key]) for key in patient_image}
         patient_image = np.stack([patient_image[key] for key in patient_image])
         if _patient["seg"] is not None:
-            et = patient_label == 4
-            et_present = 1 if np.sum(et) >= 1 else 0
-            tc = np.logical_or(patient_label == 4, patient_label == 1)
-            wt = np.logical_or(tc, patient_label == 2)
-            patient_label = np.stack([et, tc, wt])
+            # et = patient_label == 4
+            # et_present = 1 if np.sum(et) >= 1 else 0
+            # tc = np.logical_or(patient_label == 4, patient_label == 1)
+            # wt = np.logical_or(tc, patient_label == 2)
+            # patient_label = np.stack([et, tc, wt])
+            bg = patient_label == 0
+            lv = patient_label == 1
+            tm = patient_label == 2
+            patient_label = np.stack([bg, lv, tm])
         else:
             patient_label = np.zeros(patient_image.shape)  # placeholders, not gonna use it
             et_present = 0
@@ -74,7 +82,7 @@ class Brats(Dataset):
                     image=patient_image, label=patient_label,
                     seg_path=str(_patient["seg"]) if not self.validation else str(_patient["t1"]),
                     crop_indexes=((zmin, zmax), (ymin, ymax), (xmin, xmax)),
-                    et_present=et_present,
+                    et_present=True,
                     supervised=True,
                     )
 
@@ -92,25 +100,26 @@ def get_datasets(seed, on="train", fold_number=0, normalisation="minmax"):
     assert base_folder.exists()
     patients_dir = sorted([x for x in base_folder.iterdir() if x.is_dir()])
 
-    kfold = KFold(3, shuffle=True, random_state=seed)
+    kfold = KFold(5, shuffle=True, random_state=seed)
     splits = list(kfold.split(patients_dir))
     train_idx, val_idx = splits[fold_number]
     len_val = len(val_idx)
-    val_index = val_idx[: len_val//2]
-    test_index = val_idx[len_val // 2 :]
+    val_index = val_idx[: len_val]
+    # test_index = val_idx[len_val // 2 :]
 
     train = [patients_dir[i] for i in train_idx]
     val = [patients_dir[i] for i in val_index]
-    test = [patients_dir[i] for i in test_index]
+    # test = [patients_dir[i] for i in test_index]
 
     # return patients_dir
     train_dataset = Brats(train, training=True,
                           normalisation=normalisation)
     val_dataset = Brats(val, training=False, data_aug=False,
                         normalisation=normalisation)
-    bench_dataset = Brats(test, training=False, benchmarking=True,
-                          normalisation=normalisation)
-    return train_dataset, val_dataset, bench_dataset
+    # bench_dataset = Brats(test, training=False, benchmarking=True,
+    #                       normalisation=normalisation)
+    return train_dataset, val_dataset
+    # return train_dataset, val_dataset, bench_dataset
 
 
 def get_test_datasets(seed, on="train", fold_number=0, normalisation="minmax"):

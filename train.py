@@ -15,12 +15,13 @@ from torch.utils.tensorboard import SummaryWriter
 
 from config import get_config
 from dataset.brats import get_datasets
-from loss import EDiceLoss
+from loss import EDiceLoss, GeneralizedDiceLoss
 from loss.dice import EDiceLoss_Val
 from utils import AverageMeter, ProgressMeter, save_checkpoint, reload_ckpt_bis, \
     count_parameters, save_metrics, save_args_1, inference, post_trans, dice_metric, \
     dice_metric_batch
 from vtunet.vision_transformer import VTUNet as ViT_seg
+import SimpleITK as sitk
 
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.enabled = False
@@ -100,24 +101,27 @@ def main(args):
     with model_file.open("w") as f:
         print(model_1, file=f)
 
-    criterion = EDiceLoss().cuda()
-    criterian_val = EDiceLoss_Val().cuda()
+    # criterion = EDiceLoss().cuda()
+    criterion = GeneralizedDiceLoss().cuda()
+    # criterian_val = EDiceLoss_Val().cuda()
+    criterian_val = GeneralizedDiceLoss().cuda()
     metric = criterian_val.metric
     print(metric)
     params = model_1.parameters()
 
     optimizer = torch.optim.Adam(params, lr=args.lr, weight_decay=args.weight_decay)
 
-    full_train_dataset, l_val_dataset, bench_dataset = get_datasets(args.seed, fold_number=args.fold)
+    # full_train_dataset, l_val_dataset, bench_dataset = get_datasets(args.seed, fold_number=args.fold)
+    full_train_dataset, l_val_dataset = get_datasets(args.seed, fold_number=args.fold)
     train_loader = torch.utils.data.DataLoader(full_train_dataset, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.workers, pin_memory=True, drop_last=True)
     val_loader = torch.utils.data.DataLoader(l_val_dataset, batch_size=1, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
-    bench_loader = torch.utils.data.DataLoader(bench_dataset, batch_size=1, num_workers=args.workers)
+    # bench_loader = torch.utils.data.DataLoader(bench_dataset, batch_size=1, num_workers=args.workers)
 
     print("Train dataset number of batch:", len(train_loader))
     print("Val dataset number of batch:", len(val_loader))
-    print("Bench Test dataset number of batch:", len(bench_loader))
+    # print("Bench Test dataset number of batch:", len(bench_loader))
 
     # Actual Train loop
     best_1 = 0.0
@@ -160,7 +164,37 @@ def main(args):
                 optimizer.zero_grad()
 
                 segs_S1 = model_1(inputs_S1)
+                # if epoch % 20 == 0:
+                    # id_patient = batch[0]['patient_id'][0]
+                    # ref_seg_img = sitk.ReadImage(f"./Data/{id_patient}/{id_patient}.nii.gz")
+                    #
+                    # path = f"{args.save_folder_1}/segs_{epoch}/"
+                    # isExist = os.path.exists(path)
+                    #
+                    # if not isExist:
+                    #     os.makedirs(path)
 
+                    # labelmap = inputs_S1.cpu().detach()[0][0].numpy()
+                    # seg = sitk.GetImageFromArray(labelmap)
+                    # seg.CopyInformation(ref_seg_img)
+                    #
+                    # print(f"Writing {args.save_folder_1}/segs_{epoch}/{id_patient}.nii.gz")
+                    # sitk.WriteImage(seg, f"{args.save_folder_1}/segs_{epoch}/{id_patient}.nii.gz")
+
+                    # segs = segs_S1.cpu().detach()[0].numpy() > 0.5
+                    #
+                    # Background = segs[0]
+                    # Liver = np.logical_and(segs[1], np.logical_not(Background))
+                    # Tumor = np.logical_and(segs[2], np.logical_not(segs[1]))
+                    # labelmap = np.zeros(segs[0].shape)
+                    # labelmap[Background] = 0
+                    # labelmap[Liver] = 1
+                    # labelmap[Tumor] = 2
+                    # seg = sitk.GetImageFromArray(labelmap)
+                    # seg.CopyInformation(ref_seg_img)
+                    #
+                    # print(f"Writing {args.save_folder_1}/segs_{epoch}/{id_patient}.nii.gz")
+                    # sitk.WriteImage(seg, f"{args.save_folder_1}/segs_{epoch}/lb{id_patient[2:]}.nii.gz")
                 loss_ = criterion(segs_S1, labels_S1)
 
                 t_writer_1.add_scalar(f"Loss/{mode}{''}",
@@ -259,7 +293,7 @@ def step(data_loader, model, criterion: EDiceLoss_Val, metric, epoch, writer, sa
 
             segs = val_outputs
             targets = val_labels
-            loss_ = criterion(segs, targets)
+            loss_ = criterion(segs, targets, train=False)
             dice_metric(y_pred=val_outputs_1, y=val_labels)
 
         if patients_perf is not None:
